@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">weblib</string>
+
+    <string name="cancel">取消</string>
+    <string name="continue_open">继续</string>
+
+    <!-- SSL Error-->
+    <string name="ssl_error">SSL证书错误。</string>
+    <string name="ssl_error_not_trust">SSL证书颁发机构未受信任。</string>
+    <string name="ssl_error_expired">SSL证书已过期。</string>
+    <string name="ssl_error_mismatch">SSL安全证书域名与网站网址不一致。</string>
+    <string name="ssl_error_not_valid">SSL证书还未生效。</string>
+    <string name="ssl_error_continue_open">是否继续打开该网页?</string>
+</resources>

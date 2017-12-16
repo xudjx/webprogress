@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="format-detection" content="telephone = no">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+    <style type="text/css">
+        .item {
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+            background-color: #999999;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body style="height: 100%;">
+<script>
+    function callAppToast() {
+        dj.post("showToast", {message: "this is action from html"});
+    }
+
+    function callAppDialog() {
+        dj.postWithCallback("showDialog",
+            {title: "Note", content: "This is web call native to show dialog." ,buttons:[{title:"confirm", id: "confirm"},{title:"cancel", id: "cancel"}]},function(paras) {
+            if (paras.id == 'confirm') {
+                dj.post("showToast", {message: "confirm"});
+            } else if (paras.id == 'cancel') {
+                dj.post("showToast", {message: "cancel"});
+            }
+        });
+    }
+
+    function callAppDataProvider() {
+        dj.postWithCallback("appDataProvider", {type: "account"}, function(res) {
+            dj.post("showToast", {message: JSON.stringify(res)});
+        });
+    }
+</script>
+<div class="item" style="font-size: 20px; color: #ffffff" onclick="callAppToast()">调用: showToast</div>
+<div class="item" style="font-size: 20px; color: #ffffff" onclick="callAppDialog()">调用: showDialog</div>
+<div class="item" style="font-size: 20px; color: #ffffff" onclick="callAppDataProvider()">调用: appDataProvider</div>
+<script src="js/dj.js" charset="utf-8"></script>
+</body>
+</html>
