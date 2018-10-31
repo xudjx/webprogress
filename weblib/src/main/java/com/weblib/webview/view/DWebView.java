@@ -3,54 +3,65 @@ package com.weblib.webview.view;
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
+import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Rect;
+import android.net.Uri;
 import android.net.http.SslError;
 import android.os.AsyncTask;
 import android.os.Build;
+import android.support.annotation.RequiresApi;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.ActionMode;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewParent;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
-import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import com.google.gson.Gson;
 import com.weblib.webview.R;
+import com.weblib.webview.interfaces.DWebViewCallBack;
 import com.weblib.webview.interfaces.JsRemoteInterface;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Created by xud on 2017/8/1.
+ * Created by xud on 2018/9/1.
  */
 public class DWebView extends WebView {
+
     private static final ExecutorService THREAD_POOL = Executors.newSingleThreadExecutor();
+
+    private static final String TAG = "DWebView";
+
     public static final String CONTENT_SCHEME = "file:///android_asset/";
 
     private ActionMode.Callback mCustomCallback;
+
     protected Context context;
+
     boolean isReady;
 
-    private PageFinishedCallBack pageFinishedCallBack;
-    private PageStartedCallBack pageStartedCallBack;
-    private OverrideUrlLoadingCallBack urlLoadingCallBack;
+    private DWebViewCallBack dWebViewCallBack;
+
     private Map<String, String> mHeaders;
 
-    private OnErrorListener mOnErrorListener;
+    private JsRemoteInterface remoteInterface = null;
 
     public DWebView(Context context) {
         super(context);
@@ -67,26 +78,14 @@ public class DWebView extends WebView {
         init(context);
     }
 
-    public void setOnErrorListener(OnErrorListener onErrorListener) {
-        mOnErrorListener = onErrorListener;
-    }
-
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public DWebView(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
         init(context);
     }
 
-    public void setPageFinishedCallBack(PageFinishedCallBack pageFinishedCallBack) {
-        this.pageFinishedCallBack = pageFinishedCallBack;
-    }
-
-    public void setPageStartedCallBack(PageStartedCallBack pageStartedCallBack) {
-        this.pageStartedCallBack = pageStartedCallBack;
-    }
-
-    public void setUrlLoadingCallBack(OverrideUrlLoadingCallBack urlLoadingCallBack) {
-        this.urlLoadingCallBack = urlLoadingCallBack;
+    public void registerdWebViewCallBack(DWebViewCallBack dWebViewCallBack) {
+        this.dWebViewCallBack = dWebViewCallBack;
     }
 
     public void setHeaders(Map<String, String> mHeaders) {
@@ -95,47 +94,24 @@ public class DWebView extends WebView {
 
     protected void init(Context context) {
         this.context = context;
-
-        //解决 在点击后自动滑到顶部的bug
-//        setFocusable(false);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            enableSlowWholeDocumentDraw();
-        }
-
-        final WebSettings settings = getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setAppCacheEnabled(true);
-        settings.setSupportZoom(false);
-        settings.setBuiltInZoomControls(false);
-        settings.setUseWideViewPort(true);
-        settings.setLoadWithOverviewMode(true);
-        settings.setDomStorageEnabled(true);
-        //设置支持app cache
-        String appCacheDir = getContext().getDir("cache", Context.MODE_PRIVATE).getPath();
-        settings.setAppCachePath(appCacheDir);
-        settings.setAllowFileAccess(true);
-        settings.setAppCacheMaxSize(1024*1024*8);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-
-
-        /**
-         * Used with {@link android.webkit.WebSettings#MIXED_CONTENT_NEVER_ALLOW}
-         */
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-            settings.setAllowUniversalAccessFromFileURLs(true);
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            WebView.setWebContentsDebuggingEnabled(true);
-        }
-
+        WebDefaultSettingManager.getInstance().toSetting(this);
         setWebViewClient(new DWebViewClient());
 
+        /**
+         * Web Native交互触发
+         */
+        if (remoteInterface == null) {
+            remoteInterface = new JsRemoteInterface(context);
+            remoteInterface.setAidlCommand(new JsRemoteInterface.AidlCommand() {
+                @Override
+                public void exec(Context context, String cmd, String params) {
+                    if (dWebViewCallBack != null) {
+                        dWebViewCallBack.exec(context, dWebViewCallBack.getCommandLevel(), cmd, params, DWebView.this);
+                    }
+                }
+            });
+        }
+        setJavascriptInterface(remoteInterface);
     }
 
     @Override
@@ -170,10 +146,6 @@ public class DWebView extends WebView {
 
     public void setCustomActionCallback(ActionMode.Callback callback) {
         mCustomCallback = callback;
-    }
-
-    public void release() {
-        this.destroy();
     }
 
     private static class CallbackWrapperBase implements ActionMode.Callback {
@@ -313,45 +285,193 @@ public class DWebView extends WebView {
         }
     }
 
-    public interface PageFinishedCallBack {
-        void pageFinished(String url);
+    @Override
+    public void loadUrl(String url) {
+        super.loadUrl(url);
+        Log.e(TAG, "DWebView load url: " + url);
+        resetAllStateInternal(url);
     }
 
-    public interface PageStartedCallBack {
-        void pageStarted(String url);
+    @Override
+    public void loadUrl(String url, Map<String, String> additionalHttpHeaders) {
+        super.loadUrl(url, additionalHttpHeaders);
+        Log.e(TAG, "DWebView load url: " + url);
+        resetAllStateInternal(url);
     }
 
-    public interface OverrideUrlLoadingCallBack {
-        void overrideUrlLoading(WebView view, String url);
+    public void handleCallback(String response) {
+        if (!TextUtils.isEmpty(response)) {
+            String trigger = "javascript:" + "dj.callback" + "(" + response + ")";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                evaluateJavascript(trigger, null);
+            } else {
+                loadUrl(trigger);
+            }
+        }
+    }
+
+    public void loadJs(String trigger) {
+        if (!TextUtils.isEmpty(trigger)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                evaluateJavascript(trigger, null);
+            } else {
+                loadUrl(trigger);
+            }
+        }
+    }
+
+    public void loadJS(String cmd, Object param) {
+        String trigger = "javascript:" + cmd + "(" + new Gson().toJson(param) + ")";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            evaluateJavascript(trigger, null);
+        } else {
+            loadUrl(trigger);
+        }
+    }
+
+    public void loadJS(String trigger) {
+        if (!TextUtils.isEmpty(trigger)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                evaluateJavascript(trigger, null);
+            } else {
+                loadUrl(trigger);
+            }
+        }
+    }
+
+    public void dispatchEvent(String name) {
+        Map<String, String> param = new HashMap<>(1);
+        param.put("name", name);
+        loadJS("dj.dispatchEvent", param);
+    }
+
+    public void dispatchEvent(Map params) {
+        loadJS("dj.dispatchEvent", params);
+    }
+
+    @Override
+    public void goBack() {
+        super.goBack();
+    }
+
+    private boolean mTouchByUser;
+
+    public boolean isTouchByUser() {
+        return mTouchByUser;
+    }
+
+    private void resetAllStateInternal(String url) {
+        if (!TextUtils.isEmpty(url) && url.startsWith("javascript:")) {
+            return;
+        }
+        resetAllState();
+    }
+
+    // 加载url时重置touch状态
+    protected void resetAllState() {
+        mTouchByUser = false;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                mTouchByUser = true;
+                break;
+        }
+        return super.onTouchEvent(event);
     }
 
     public class DWebViewClient extends WebViewClient {
 
+        public static final String SCHEME_SMS = "sms:";
+
+        /**
+         * url重定向会执行此方法以及点击页面某些链接也会执行此方法
+         *
+         * @return true:表示当前url已经加载完成，即使url还会重定向都不会再进行加载 false 表示此url默认由系统处理，该重定向还是重定向，直到加载完成
+         */
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-//            Log.e("jhy","override url:"+url);
-            if (urlLoadingCallBack != null) {
-                urlLoadingCallBack.overrideUrlLoading(view, url);
+            Log.e(TAG, "shouldOverrideUrlLoading url: " + url);
+            // 当前链接的重定向, 通过是否发生过点击行为来判断
+            if (!isTouchByUser()) {
+                return super.shouldOverrideUrlLoading(view, url);
+            }
+            // 如果链接跟当前链接一样，表示刷新
+            if (getUrl().equals(url)) {
+                return super.shouldOverrideUrlLoading(view, url);
+            }
+            if (handleLinked(url)) {
                 return true;
             }
+            if (dWebViewCallBack != null && dWebViewCallBack.overrideUrlLoading(view, url)) {
+                return true;
+            }
+            // 控制页面中点开新的链接在当前webView中打开
             view.loadUrl(url, mHeaders);
             return true;
         }
 
+        @RequiresApi(api = Build.VERSION_CODES.N)
+        @Override
+        public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            Log.e(TAG, "shouldOverrideUrlLoading url: "+ request.getUrl());
+            // 当前链接的重定向
+            if (!isTouchByUser()) {
+                return super.shouldOverrideUrlLoading(view, request);
+            }
+            // 如果链接跟当前链接一样，表示刷新
+            if (getUrl().equals(request.getUrl().toString())) {
+                return super.shouldOverrideUrlLoading(view, request);
+            }
+            if (handleLinked(request.getUrl().toString())) {
+                return true;
+            }
+            if (dWebViewCallBack != null && dWebViewCallBack.overrideUrlLoading(view, request.getUrl().toString())) {
+                return true;
+            }
+            // 控制页面中点开新的链接在当前webView中打开
+            view.loadUrl(request.getUrl().toString(), mHeaders);
+            return true;
+        }
+
+        /**
+         * 支持电话、短信、邮件、地图跳转，跳转的都是手机系统自带的应用
+         */
+        private boolean handleLinked(String url) {
+            if (url.startsWith(WebView.SCHEME_TEL)
+                    || url.startsWith(SCHEME_SMS)
+                    || url.startsWith(WebView.SCHEME_MAILTO)
+                    || url.startsWith(WebView.SCHEME_GEO)) {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setData(Uri.parse(url));
+                    context.startActivity(intent);
+                } catch (ActivityNotFoundException ignored) {
+                    ignored.printStackTrace();
+                }
+                return true;
+            }
+            return false;
+        }
+
         @Override
         public void onPageFinished(WebView view, String url) {
+            Log.e(TAG, "onPageFinished url:" + url);
             if (!TextUtils.isEmpty(url) && url.startsWith(CONTENT_SCHEME)) {
                 isReady = true;
             }
-            if (pageFinishedCallBack != null) {
-                pageFinishedCallBack.pageFinished(url);
+            if (dWebViewCallBack != null) {
+                dWebViewCallBack.pageFinished(url);
             }
         }
 
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
-            if (pageStartedCallBack != null) {
-                pageStartedCallBack.pageStarted(url);
+            Log.e(TAG, "onPageStarted url: " + url);
+            if (dWebViewCallBack != null) {
+                dWebViewCallBack.pageStarted(url);
             }
         }
 
@@ -367,24 +487,22 @@ public class DWebView extends WebView {
         }
 
         @Override
+        public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+            return null;
+        }
+
+        @Override
         public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
             super.onReceivedError(view, errorCode, description, failingUrl);
-            Log.e("webview error", errorCode + " + " + description);
-            if(mOnErrorListener != null) {
-                mOnErrorListener.onError();
+            Log.e(TAG, "webview error" + errorCode + " + " + description);
+            if (dWebViewCallBack != null) {
+                dWebViewCallBack.onError();
             }
         }
 
         @Override
         public void onReceivedSslError(WebView view, final SslErrorHandler handler, SslError error) {
             String channel = "";
-            ApplicationInfo appInfo = null;
-            try {
-                appInfo = context.getPackageManager().getApplicationInfo(context.getPackageName(), PackageManager.GET_META_DATA);
-                channel = appInfo.metaData.getString("TD_CHANNEL_ID");
-            } catch (PackageManager.NameNotFoundException e) {
-                e.printStackTrace();
-            }
             if (!TextUtils.isEmpty(channel) && channel.equals("play.google.com")) {
                 final AlertDialog.Builder builder = new AlertDialog.Builder(context);
                 String message = context.getString(R.string.ssl_error);
@@ -426,12 +544,12 @@ public class DWebView extends WebView {
         }
     }
 
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+    }
+
     public boolean isReady() {
         return isReady;
     }
-
-    public interface OnErrorListener {
-        void onError();
-    }
-
 }

@@ -5,10 +5,9 @@ import android.os.RemoteException;
 import android.util.Log;
 
 import com.google.gson.Gson;
-import com.weblib.webview.CommandsManager;
+import com.weblib.webview.command.CommandsManager;
 import com.weblib.webview.IWebAidlCallback;
 import com.weblib.webview.IWebAidlInterface;
-import com.weblib.webview.RemoteActionConstants;
 import com.weblib.webview.interfaces.ResultBack;
 
 import java.util.Map;
@@ -31,16 +30,13 @@ public class MainProAidlInterface extends IWebAidlInterface.Stub {
         Log.d("webli" , String.format("MainProAidlInterface: 进程ID（%d）， WebView请求（%s）, 参数 （%s）", pid, actionName, jsonParams));
         try {
             handleRemoteAction(level, actionName, new Gson().fromJson(jsonParams, Map.class), callback);
-            if (actionName.equals(RemoteActionConstants.ACTION_EVENT_BUS)) {
-                handleEventAction(level, actionName, new Gson().fromJson(jsonParams, Map.class), callback);
-            }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     private void handleRemoteAction(int level, final String actionName, Map paramMap, final IWebAidlCallback callback) throws Exception {
-        CommandsManager.getInstance(context).findAndExec(level, actionName, paramMap, new ResultBack() {
+        CommandsManager.getInstance().findAndExecNonUICommand(context, level, actionName, paramMap, new ResultBack() {
             @Override
             public void onResult(int status, String action, Object result) {
                 try {
@@ -52,10 +48,5 @@ public class MainProAidlInterface extends IWebAidlInterface.Stub {
                 }
             }
         });
-    }
-
-    private void handleEventAction(int level, String actinName, Map paramMap, IWebAidlCallback callback) throws Exception {
-        String eventType = paramMap.get("messageType").toString();
-        Gson gson = new Gson();
     }
 }

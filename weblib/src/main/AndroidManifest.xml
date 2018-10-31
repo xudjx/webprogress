@@ -12,16 +12,6 @@
 
         <service android:name="com.weblib.webview.aidl.mainpro.MainProHandleRemoteService"/>
 
-        <activity
-            android:name="com.weblib.webview.RemoteCommonWebActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:process=":remoteWeb"/>
-
-        <activity
-            android:name="com.weblib.webview.RemoteAccountWebActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:process=":remoteWeb"/>
-
     </application>
 
 </manifest>

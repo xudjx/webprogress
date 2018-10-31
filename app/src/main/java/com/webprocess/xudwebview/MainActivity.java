@@ -4,8 +4,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 
-import com.weblib.webview.RemoteAccountWebActivity;
-import com.weblib.webview.RemoteCommonWebActivity;
+import com.weblib.webview.WebConstants;
 import com.weblib.webview.view.DWebView;
 
 public class MainActivity extends AppCompatActivity {
@@ -18,7 +17,7 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.openWeb1).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                RemoteCommonWebActivity.start(MainActivity.this, "百度一下", "http://baidu.com");
+                WebActivity.start(MainActivity.this, "腾讯网", "https://xw.qq.com/?f=qqcom", WebConstants.LEVEL_BASE);
             }
         });
 
@@ -29,7 +28,7 @@ public class MainActivity extends AppCompatActivity {
                 //RemoteCommonWebActivity.start(MainActivity.this, "AIDL测试", DWebView.CONTENT_SCHEME + "aidl.html");
 
                 // for account level
-                RemoteAccountWebActivity.start(MainActivity.this, "AIDL测试", DWebView.CONTENT_SCHEME + "aidl.html");
+                WebActivity.start(MainActivity.this, "AIDL测试", DWebView.CONTENT_SCHEME + "aidl.html", WebConstants.LEVEL_ACCOUNT);
             }
         });
     }
