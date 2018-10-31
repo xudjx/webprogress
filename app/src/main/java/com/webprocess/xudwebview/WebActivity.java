@@ -52,7 +52,6 @@ public class WebActivity extends AppCompatActivity {
             webviewFragment = CommonWebFragment.newInstance(url);
         } else {
             webviewFragment = AccountWebFragment.newInstance(url);
-            transaction.replace(R.id.web_view_fragment, webviewFragment).commit();
         }
         transaction.replace(R.id.web_view_fragment, webviewFragment).commit();
     }
