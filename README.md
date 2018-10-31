@@ -15,6 +15,9 @@
 1. 为方便Web和Native交互，提供了中间件dj.js;
 2. 为方便Native处理Web请求，尤其是在WebView独立进程下的数据请求，设计了一套接口请求分发方案
 
+**独特的Native Command注入和分发机制**
+
+Command表示Native支持的Function，native将支持的Command提前注入到集合之中，细节之处可以查看源代码
 
 测试所有的html存在assets目录下，测试的效果如下:
 
